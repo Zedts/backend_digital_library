@@ -71,3 +71,13 @@ CREATE TABLE Ratings (
   FOREIGN KEY (book_id) REFERENCES Books(book_id),
   UNIQUE (users_id, book_id)
 );
+
+CREATE TABLE Bookmarks (
+  bookmark_id INT AUTO_INCREMENT PRIMARY KEY,
+  users_id INT NOT NULL,
+  book_id INT NOT NULL,
+  bookmark_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (users_id) REFERENCES Users(users_id),
+  FOREIGN KEY (book_id) REFERENCES Books(book_id),
+  UNIQUE (users_id, book_id)
+);
