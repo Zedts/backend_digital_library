@@ -29,6 +29,22 @@ class UserModel {
       return { success: false, error: error.message };
     }
   }
+
+  // Get count of new users this week
+  static async getNewUsersThisWeekCount() {
+    try {
+      const query = `
+        SELECT COUNT(*) as total 
+        FROM Users 
+        WHERE created_date >= DATEADD(day, -7, GETDATE()) 
+        AND role = 'users'
+      `;
+      const result = await connectDBDigitalLibrary(query);
+      return { success: true, data: result.recordset[0].total };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default UserModel;

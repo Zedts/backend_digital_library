@@ -1,5 +1,6 @@
 import UserModel from '../models/User.js';
 import RegisterModel from '../models/Register.js';
+import jwt from 'jsonwebtoken';
 
 class AuthController {
   // Login controller
@@ -18,6 +19,17 @@ class AuthController {
       const result = await UserModel.authenticateUser(email, password);
       
       if (result.success && result.data) {
+        // Generate JWT token with 12 hour expiration
+        const token = jwt.sign(
+          { 
+            users_id: result.data.users_id,
+            email: result.data.email,
+            role: result.data.role
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '12h' }
+        );
+
         return res.status(200).json({
           success: true,
           message: 'Login successful',
@@ -25,7 +37,8 @@ class AuthController {
             users_id: result.data.users_id,
             name: result.data.name,
             email: result.data.email,
-            role: result.data.role
+            role: result.data.role,
+            token: token
           }
         });
       } else {

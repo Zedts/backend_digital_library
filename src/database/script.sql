@@ -85,6 +85,14 @@ CREATE TABLE Bookmarks (
   CONSTRAINT UQ_UserBookBookmark UNIQUE (users_id, book_id)
 );
 
+CREATE TABLE ReadingProgress (
+  progress_id INT IDENTITY(1,1) PRIMARY KEY,
+  borrowing_id INT NOT NULL,
+  progress_percentage INT DEFAULT 0 CHECK (progress_percentage >= 0 AND progress_percentage <= 100),
+  last_updated DATETIME DEFAULT GETDATE(),
+  FOREIGN KEY (borrowing_id) REFERENCES Borrowings(borrowing_id)
+);
+
 -- Insert default admin user with MD5 hashed password
 INSERT INTO Users (name, email, password, role, created_date, updated_date) 
 VALUES (
