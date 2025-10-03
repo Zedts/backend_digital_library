@@ -5,13 +5,14 @@ class BookController {
   // Get all books with pagination and filters
   static async getBooks(req, res) {
     try {
-      const { page = 1, limit = 10, search = '', category = '' } = req.query;
+      const { page = 1, limit = 10, search = '', category = '', stock = '' } = req.query;
       
       const result = await BookModel.getBooksWithPagination(
         parseInt(page), 
         parseInt(limit), 
         search, 
-        category
+        category,
+        stock
       );
 
       if (result.success) {
@@ -50,7 +51,20 @@ class BookController {
   // Create new book
   static async createBook(req, res) {
     try {
-      const { title, author, publisher, publish_year, stock, category_id } = req.body;
+      const { 
+        title, 
+        author, 
+        publisher, 
+        publish_year, 
+        isbn,
+        pages,
+        stock, 
+        location,
+        description,
+        category_id,
+        cover_type,
+        cover_url 
+      } = req.body;
 
       // Validate input
       if (!title || !author) {
@@ -64,17 +78,29 @@ class BookController {
         title,
         author,
         publisher: publisher || '',
-        publish_year: publish_year || new Date().getFullYear(),
-        stock: stock || 0,
+        publish_year: publish_year ? parseInt(publish_year) : new Date().getFullYear(),
+        isbn: isbn ? parseInt(isbn) : null,
+        pages: pages ? parseInt(pages) : null,
+        stock: stock ? parseInt(stock) : 0,
+        location: location || '',
+        description: description || '',
         category_id: category_id || null
       };
+
+      // Handle cover image
+      if (cover_type === 'url' && cover_url) {
+        bookData.image_url = cover_url;
+      } else if (cover_type === 'file' && req.file) {
+        bookData.image_url = `/uploads/${req.file.filename}`;
+      }
 
       const result = await BookModel.createBook(bookData);
 
       if (result.success) {
         res.status(201).json({
           success: true,
-          message: result.message
+          message: result.message,
+          book_id: result.book_id
         });
       } else {
         res.status(400).json({
@@ -91,7 +117,20 @@ class BookController {
   static async updateBook(req, res) {
     try {
       const { id } = req.params;
-      const { title, author, publisher, publish_year, stock, category_id } = req.body;
+      const { 
+        title, 
+        author, 
+        publisher, 
+        publish_year, 
+        isbn,
+        pages,
+        stock, 
+        location,
+        description,
+        category_id,
+        cover_type,
+        cover_url 
+      } = req.body;
 
       // Validate input
       if (!title || !author) {
@@ -105,10 +144,21 @@ class BookController {
         title,
         author,
         publisher: publisher || '',
-        publish_year: publish_year || new Date().getFullYear(),
-        stock: stock || 0,
+        publish_year: publish_year ? parseInt(publish_year) : new Date().getFullYear(),
+        isbn: isbn ? parseInt(isbn) : null,
+        pages: pages ? parseInt(pages) : null,
+        stock: stock ? parseInt(stock) : 0,
+        location: location || '',
+        description: description || '',
         category_id: category_id || null
       };
+
+      // Handle cover image
+      if (cover_type === 'url' && cover_url) {
+        bookData.image_url = cover_url;
+      } else if (cover_type === 'file' && req.file) {
+        bookData.image_url = `/uploads/${req.file.filename}`;
+      }
 
       const result = await BookModel.updateBook(id, bookData);
 

@@ -10,7 +10,8 @@ CREATE TABLE Users (
 
 CREATE TABLE Categories (
   category_id INT IDENTITY(1,1) PRIMARY KEY,
-  category_name VARCHAR(100) NOT NULL
+  category_name VARCHAR(100) NOT NULL,
+  color VARCHAR(7) DEFAULT '#3B82F6'
 );
 
 CREATE TABLE Books (
@@ -19,7 +20,11 @@ CREATE TABLE Books (
   author VARCHAR(150),
   publisher VARCHAR(150),
   publish_year INT,
+  isbn INT,
+  pages INT,
   stock INT NOT NULL DEFAULT 0,
+  location VARCHAR(500),
+  description VARCHAR(500),
   category_id INT,
   FOREIGN KEY (category_id) REFERENCES Categories(category_id)
 );
