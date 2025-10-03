@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./src/routes/authRoutes.js";
 import dashboardRoutes from "./src/routes/dashboardRoutes.js";
+import bookRoutes from "./src/routes/bookRoutes.js";
 
 dotenv.config();
 
@@ -17,6 +18,8 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/books', bookRoutes);
+app.use('/api/categories', bookRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://${HOSTNAME}:${PORT}`);
