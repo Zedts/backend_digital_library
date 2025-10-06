@@ -6,6 +6,7 @@ import dashboardRoutes from "./src/routes/dashboardRoutes.js";
 import bookRoutes from "./src/routes/bookRoutes.js";
 import categoryRoutes from "./src/routes/categoryRoutes.js";
 import borrowingRoutes from "./src/routes/borrowingRoutes.js";
+import registrationRoutes from "./src/routes/registrationRoutes.js";
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/borrowings', borrowingRoutes);
+app.use('/api/registrations', registrationRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://${HOSTNAME}:${PORT}`);
