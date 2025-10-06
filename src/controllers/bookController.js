@@ -36,9 +36,15 @@ class BookController {
       const result = await BookModel.getBookById(id);
 
       if (result.success) {
+        // Get rating comments for this book
+        const commentsResult = await BookModel.getBookRatingComments(id);
+        
         res.json({
           success: true,
-          data: result.data
+          data: {
+            ...result.data,
+            rating_comments: commentsResult.success ? commentsResult.data : []
+          }
         });
       } else {
         res.status(404).json({ error: 'Book not found' });

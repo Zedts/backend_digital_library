@@ -80,7 +80,7 @@ CREATE TABLE Ratings (
   users_id INT NOT NULL,     
   book_id INT NOT NULL,     
   rating INT CHECK (rating >= 1 AND rating <= 5),
-  comment TEXT,
+  comment VARCHAR(500),
   rating_date DATETIME DEFAULT GETDATE(),
   FOREIGN KEY (users_id) REFERENCES Users(users_id),
   FOREIGN KEY (book_id) REFERENCES Books(book_id),

@@ -39,7 +39,9 @@ class BookModel {
                b.isbn, b.pages, b.stock, b.location, b.description, b.category_id,
                c.category_name,
                bi.image_url,
-               (SELECT COUNT(*) FROM Borrowings br WHERE br.book_id = b.book_id AND br.status = 'Borrowed') as borrowed_count
+               (SELECT COUNT(*) FROM Borrowings br WHERE br.book_id = b.book_id AND br.status = 'Borrowed') as borrowed_count,
+               (SELECT AVG(CAST(rating AS FLOAT)) FROM Ratings WHERE book_id = b.book_id) as average_rating,
+               (SELECT COUNT(*) FROM Ratings WHERE book_id = b.book_id) as total_ratings
         FROM Books b
         LEFT JOIN Categories c ON b.category_id = c.category_id
         LEFT JOIN BookImages bi ON b.book_id = bi.book_id AND bi.is_primary = 1
@@ -97,7 +99,9 @@ class BookModel {
                b.isbn, b.pages, b.stock, b.location, b.description,
                c.category_name, c.category_id,
                bi.image_url,
-               (SELECT COUNT(*) FROM Borrowings br WHERE br.book_id = b.book_id AND br.status = 'Borrowed') as borrowed_count
+               (SELECT COUNT(*) FROM Borrowings br WHERE br.book_id = b.book_id AND br.status = 'Borrowed') as borrowed_count,
+               (SELECT AVG(CAST(rating AS FLOAT)) FROM Ratings WHERE book_id = b.book_id) as average_rating,
+               (SELECT COUNT(*) FROM Ratings WHERE book_id = b.book_id) as total_ratings
         FROM Books b
         LEFT JOIN Categories c ON b.category_id = c.category_id
         LEFT JOIN BookImages bi ON b.book_id = bi.book_id AND bi.is_primary = 1
@@ -284,6 +288,50 @@ class BookModel {
       `;
       await connectDBDigitalLibrary(query);
       return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get book rating summary
+  static async getBookRating(bookId) {
+    try {
+      const query = `
+        SELECT 
+          AVG(CAST(rating AS FLOAT)) as average_rating,
+          COUNT(*) as total_ratings
+        FROM Ratings 
+        WHERE book_id = ${bookId}
+      `;
+      const result = await connectDBDigitalLibrary(query);
+      const rating = result.recordset[0];
+      
+      return { 
+        success: true, 
+        data: {
+          average_rating: rating.average_rating ? parseFloat(rating.average_rating.toFixed(1)) : null,
+          total_ratings: rating.total_ratings
+        }
+      };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get book rating comments
+  static async getBookRatingComments(bookId) {
+    try {
+      const query = `
+        SELECT 
+          r.rating, r.comment, r.rating_date,
+          u.name as user_name
+        FROM Ratings r
+        INNER JOIN Users u ON r.users_id = u.users_id
+        WHERE r.book_id = ${bookId} AND r.comment IS NOT NULL AND r.comment != ''
+        ORDER BY r.rating_date DESC
+      `;
+      const result = await connectDBDigitalLibrary(query);
+      return { success: true, data: result.recordset };
     } catch (error) {
       return { success: false, error: error.message };
     }
