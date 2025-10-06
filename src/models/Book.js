@@ -273,6 +273,21 @@ class BookModel {
       return { success: false, error: error.message };
     }
   }
+
+  // Update book stock (for borrowing/returning)
+  static async updateBookStock(bookId, stockChange) {
+    try {
+      const query = `
+        UPDATE Books 
+        SET stock = stock + ${stockChange}
+        WHERE book_id = ${bookId}
+      `;
+      await connectDBDigitalLibrary(query);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 export default BookModel;

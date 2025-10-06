@@ -44,9 +44,16 @@ CREATE TABLE Borrowings (
   book_id INT NOT NULL,
   borrow_date DATE,
   due_date DATE,
-  status VARCHAR(20) DEFAULT 'Pending' CHECK (status IN ('Pending', 'Borrowed', 'Returned', 'Extended')),
+  return_date DATE NULL,
+  approved_by INT NULL,
+  approved_date DATETIME NULL,
+  notes VARCHAR(500) NULL,
+  created_at DATETIME DEFAULT GETDATE(),
+  updated_at DATETIME DEFAULT GETDATE(),
+  status VARCHAR(20) DEFAULT 'Pending' CHECK (status IN ('Pending', 'Borrowed', 'Returned', 'Extended', 'Overdue')),
   FOREIGN KEY (users_id) REFERENCES Users(users_id),
-  FOREIGN KEY (book_id) REFERENCES Books(book_id)
+  FOREIGN KEY (book_id) REFERENCES Books(book_id),
+  FOREIGN KEY (approved_by) REFERENCES Users(users_id)
 );
 
 CREATE TABLE Returns (

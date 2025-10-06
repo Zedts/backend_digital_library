@@ -113,11 +113,24 @@ class DashboardController {
         };
       });
 
+      // Get activity trends for line chart (last 7 days)
+      const activityTrendsResult = await BorrowingModel.getActivityTrends();
+      if (!activityTrendsResult.success) {
+        return res.status(500).json({ error: activityTrendsResult.error });
+      }
+
+      // Get system overview chart data
+      const systemOverviewChartResult = await BorrowingModel.getSystemOverviewChart();
+      if (!systemOverviewChartResult.success) {
+        return res.status(500).json({ error: systemOverviewChartResult.error });
+      }
+
       // Format system overview data
       const systemOverview = {
         overdueBooksCount: overdueBooksResult.data,
         dueTodayCount: dueTodayResult.data,
-        newUsersThisWeekCount: newUsersResult.data
+        newUsersThisWeekCount: newUsersResult.data,
+        chartData: systemOverviewChartResult.data
       };
 
       res.json({
@@ -125,6 +138,7 @@ class DashboardController {
         data: {
           stats: stats,
           recentActivities: recentActivities,
+          activityTrends: activityTrendsResult.data,
           systemOverview: systemOverview
         }
       });
