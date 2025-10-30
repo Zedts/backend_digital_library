@@ -5,14 +5,15 @@ class BookController {
   // Get all books with pagination and filters
   static async getBooks(req, res) {
     try {
-      const { page = 1, limit = 10, search = '', category = '', stock = '' } = req.query;
+      const { page = 1, limit = 10, search = '', category = '', stock = '', rating = '' } = req.query;
       
       const result = await BookModel.getBooksWithPagination(
         parseInt(page), 
         parseInt(limit), 
         search, 
         category,
-        stock
+        stock,
+        rating
       );
 
       if (result.success) {

@@ -48,23 +48,62 @@ class BorrowingController {
     }
   }
 
+  // Get user borrowings with pagination
+  static async getUserBorrowings(req, res) {
+    try {
+      const { userId } = req.params;
+      const { page = 1, limit = 10 } = req.query;
+      
+      const result = await BorrowingModel.getUserBorrowingsWithPagination(
+        parseInt(userId),
+        parseInt(page), 
+        parseInt(limit)
+      );
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: result.data,
+          pagination: result.pagination
+        });
+      } else {
+        res.status(500).json({ error: result.error });
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   // Create new borrowing (user request)
   static async createBorrowing(req, res) {
     try {
-      const { users_id, book_id, notes } = req.body;
+      const { users_id, book_id, borrow_date, due_date, quantity = 1, notes } = req.body;
       
-      // Check if book is available
+      // Check if book is available and has enough stock
       const bookResult = await BookModel.getBookById(book_id);
-      if (!bookResult.success || bookResult.data.stock <= 0) {
+      if (!bookResult.success) {
+        return res.status(404).json({ error: 'Book not found' });
+      }
+      
+      if (bookResult.data.stock <= 0) {
         return res.status(400).json({ error: 'Book is not available for borrowing' });
+      }
+      
+      if (quantity > bookResult.data.stock) {
+        return res.status(400).json({ error: `Only ${bookResult.data.stock} copies available` });
+      }
+      
+      if (quantity < 1) {
+        return res.status(400).json({ error: 'Quantity must be at least 1' });
       }
 
       const borrowingData = {
         users_id,
         book_id,
+        quantity: parseInt(quantity),
         notes,
-        borrow_date: new Date().toISOString().split('T')[0],
-        due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days from now
+        borrow_date: borrow_date || new Date().toISOString().split('T')[0],
+        due_date: due_date || new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         status: 'Pending'
       };
 
@@ -97,12 +136,13 @@ class BorrowingController {
         approved_date: new Date().toISOString()
       };
 
-      // If approving, reduce book stock
+      // If approving, reduce book stock by quantity
       if (status === 'Borrowed') {
         const borrowingResult = await BorrowingModel.getBorrowingById(id);
         if (borrowingResult.success) {
           const bookId = borrowingResult.data.book_id;
-          await BookModel.updateBookStock(bookId, -1);
+          const quantity = borrowingResult.data.quantity || 1;
+          await BookModel.updateBookStock(bookId, -quantity);
         }
       }
 
@@ -122,26 +162,56 @@ class BorrowingController {
     }
   }
 
-  // Return book
+  // Return book (user request to return)
   static async returnBook(req, res) {
     try {
       const { id } = req.params;
-      const { notes, fine = 0 } = req.body;
+      const { notes } = req.body;
       
       const updateData = {
-        status: 'Returned',
-        return_date: new Date().toISOString().split('T')[0],
-        notes
+        status: 'Waiting Return',
+        notes: notes || 'User requested to return book'
       };
 
       const result = await BorrowingModel.updateBorrowing(id, updateData);
 
       if (result.success) {
-        // Increase book stock back
+        res.json({
+          success: true,
+          data: result.data,
+          message: 'Return request submitted successfully'
+        });
+      } else {
+        res.status(400).json({ error: result.error });
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Approve return (admin confirms return)
+  static async approveReturn(req, res) {
+    try {
+      const { id } = req.params;
+      const { notes, fine = 0, approved_by } = req.body;
+      
+      const updateData = {
+        status: 'Returned',
+        return_date: new Date().toISOString().split('T')[0],
+        notes: notes || 'Return approved by admin',
+        approved_by,
+        approved_date: new Date().toISOString()
+      };
+
+      const result = await BorrowingModel.updateBorrowing(id, updateData);
+
+      if (result.success) {
+        // Increase book stock back by quantity
         const borrowingResult = await BorrowingModel.getBorrowingById(id);
         if (borrowingResult.success) {
           const bookId = borrowingResult.data.book_id;
-          await BookModel.updateBookStock(bookId, 1);
+          const quantity = borrowingResult.data.quantity || 1;
+          await BookModel.updateBookStock(bookId, quantity);
         }
 
         // Add return record if fine exists
@@ -152,7 +222,43 @@ class BorrowingController {
         res.json({
           success: true,
           data: result.data,
-          message: 'Book returned successfully'
+          message: 'Return approved successfully'
+        });
+      } else {
+        res.status(400).json({ error: result.error });
+      }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  // Reject return (admin rejects return request)
+  static async rejectReturn(req, res) {
+    try {
+      const { id } = req.params;
+      const { notes, approved_by } = req.body;
+      
+      // Get current borrowing to restore previous status
+      const borrowingResult = await BorrowingModel.getBorrowingById(id);
+      if (!borrowingResult.success) {
+        return res.status(404).json({ error: 'Borrowing not found' });
+      }
+
+      // Restore to Borrowed status
+      const updateData = {
+        status: 'Borrowed',
+        notes: notes || 'Return request rejected by admin',
+        approved_by,
+        approved_date: new Date().toISOString()
+      };
+
+      const result = await BorrowingModel.updateBorrowing(id, updateData);
+
+      if (result.success) {
+        res.json({
+          success: true,
+          data: result.data,
+          message: 'Return request rejected'
         });
       } else {
         res.status(400).json({ error: result.error });

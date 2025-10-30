@@ -11,17 +11,19 @@ class BorrowingModel {
         if (status === 'overdue') {
           whereClause += ` AND br.status = 'Borrowed' AND br.due_date < GETDATE()`;
         } else {
-          whereClause += ` AND br.status = '${status}'`;
+          const escapedStatus = status.replace(/'/g, "''");
+          whereClause += ` AND br.status = '${escapedStatus}'`;
         }
       }
       
       if (search && search !== '') {
-        whereClause += ` AND (u.name LIKE '%${search}%' OR b.title LIKE '%${search}%' OR u.email LIKE '%${search}%')`;
+        const escapedSearch = search.replace(/'/g, "''");
+        whereClause += ` AND (u.name LIKE '%${escapedSearch}%' OR b.title LIKE '%${escapedSearch}%' OR u.email LIKE '%${escapedSearch}%')`;
       }
 
       const query = `
         SELECT br.borrowing_id, br.users_id, br.book_id, br.borrow_date, br.due_date, 
-               br.return_date, br.status, br.notes, br.approved_by, br.approved_date,
+               br.return_date, br.quantity, br.status, br.notes, br.approved_by, br.approved_date,
                br.created_at, br.updated_at,
                u.name as user_name, u.email as user_email,
                b.title as book_title, b.author as book_author,
@@ -80,7 +82,7 @@ class BorrowingModel {
     try {
       const query = `
         SELECT br.borrowing_id, br.users_id, br.book_id, br.borrow_date, br.due_date, 
-               br.return_date, br.status, br.notes, br.approved_by, br.approved_date,
+               br.return_date, br.quantity, br.status, br.notes, br.approved_by, br.approved_date,
                br.created_at, br.updated_at,
                u.name as user_name, u.email as user_email,
                b.title as book_title, b.author as book_author, b.isbn, b.publisher,
@@ -111,12 +113,18 @@ class BorrowingModel {
   // Create new borrowing
   static async createBorrowing(borrowingData) {
     try {
-      const { users_id, book_id, borrow_date, due_date, notes, status = 'Pending' } = borrowingData;
+      const { users_id, book_id, borrow_date, due_date, quantity = 1, notes, status = 'Pending' } = borrowingData;
+      
+      // Escape single quotes to prevent SQL injection
+      const escapeString = (str) => {
+        if (!str) return '';
+        return str.replace(/'/g, "''");
+      };
       
       const query = `
-        INSERT INTO Borrowings (users_id, book_id, borrow_date, due_date, notes, status, created_at, updated_at)
+        INSERT INTO Borrowings (users_id, book_id, borrow_date, due_date, quantity, notes, status, created_at, updated_at)
         OUTPUT INSERTED.borrowing_id
-        VALUES (${users_id}, ${book_id}, '${borrow_date}', '${due_date}', ${notes ? `'${notes}'` : 'NULL'}, '${status}', GETDATE(), GETDATE())
+        VALUES (${users_id}, ${book_id}, '${borrow_date}', '${due_date}', ${quantity}, ${notes ? `'${escapeString(notes)}'` : 'NULL'}, '${escapeString(status)}', GETDATE(), GETDATE())
       `;
       
       const result = await connectDBDigitalLibrary(query);
@@ -133,11 +141,17 @@ class BorrowingModel {
     try {
       const fields = [];
       
-      if (updateData.status) fields.push(`status = '${updateData.status}'`);
+      // Escape single quotes to prevent SQL injection
+      const escapeString = (str) => {
+        if (!str) return '';
+        return str.replace(/'/g, "''");
+      };
+      
+      if (updateData.status) fields.push(`status = '${escapeString(updateData.status)}'`);
       if (updateData.return_date) fields.push(`return_date = '${updateData.return_date}'`);
       if (updateData.approved_by) fields.push(`approved_by = ${updateData.approved_by}`);
       if (updateData.approved_date) fields.push(`approved_date = '${updateData.approved_date}'`);
-      if (updateData.notes) fields.push(`notes = '${updateData.notes}'`);
+      if (updateData.notes) fields.push(`notes = '${escapeString(updateData.notes)}'`);
       
       fields.push(`updated_at = GETDATE()`);
       
@@ -159,12 +173,18 @@ class BorrowingModel {
     try {
       const fields = [];
       
-      if (updateData.status) fields.push(`status = '${updateData.status}'`);
+      // Escape single quotes to prevent SQL injection
+      const escapeString = (str) => {
+        if (!str) return '';
+        return str.replace(/'/g, "''");
+      };
+      
+      if (updateData.status) fields.push(`status = '${escapeString(updateData.status)}'`);
       if (updateData.due_date) fields.push(`due_date = '${updateData.due_date}'`);
       if (updateData.return_date) fields.push(`return_date = '${updateData.return_date}'`);
       if (updateData.approved_by) fields.push(`approved_by = ${updateData.approved_by}`);
       if (updateData.approved_date) fields.push(`approved_date = '${updateData.approved_date}'`);
-      if (updateData.notes) fields.push(`notes = '${updateData.notes}'`);
+      if (updateData.notes) fields.push(`notes = '${escapeString(updateData.notes)}'`);
       
       fields.push(`updated_at = GETDATE()`);
       
@@ -298,8 +318,64 @@ class BorrowingModel {
         WHERE br.users_id = ${userId}
         ORDER BY br.borrow_date DESC
       `;
+      
       const result = await connectDBDigitalLibrary(query);
       return { success: true, data: result.recordset };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get user borrowings with pagination
+  static async getUserBorrowingsWithPagination(userId, page = 1, limit = 10) {
+    try {
+      const offset = (page - 1) * limit;
+      
+      const query = `
+        SELECT br.borrowing_id, br.users_id, br.book_id, br.borrow_date, br.due_date, 
+               br.return_date, br.status, br.notes, br.approved_by, br.approved_date,
+               br.created_at, br.updated_at,
+               u.name as user_name, u.email as user_email,
+               b.title as book_title, b.author as book_author, b.isbn, b.publisher,
+               approver.name as approved_by_name,
+               DATEDIFF(day, GETDATE(), br.due_date) as days_diff,
+               CASE 
+                 WHEN (br.status = 'Borrowed' OR br.status = 'Extended') AND br.due_date < GETDATE() THEN 'Overdue'
+                 ELSE br.status 
+               END as display_status
+        FROM Borrowings br
+        JOIN Users u ON br.users_id = u.users_id
+        JOIN Books b ON br.book_id = b.book_id
+        LEFT JOIN Users approver ON br.approved_by = approver.users_id
+        WHERE br.users_id = ${userId}
+        ORDER BY br.created_at DESC
+        OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+      `;
+      
+      const countQuery = `
+        SELECT COUNT(*) as total
+        FROM Borrowings br
+        WHERE br.users_id = ${userId}
+      `;
+
+      const [result, countResult] = await Promise.all([
+        connectDBDigitalLibrary(query),
+        connectDBDigitalLibrary(countQuery)
+      ]);
+
+      const total = countResult.recordset[0].total;
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        success: true,
+        data: result.recordset,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems: total,
+          itemsPerPage: limit
+        }
+      };
     } catch (error) {
       return { success: false, error: error.message };
     }

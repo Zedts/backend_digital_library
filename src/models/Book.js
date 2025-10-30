@@ -73,13 +73,14 @@ class BookModel {
   }
 
   // Get books with pagination and search
-  static async getBooksWithPagination(page = 1, limit = 10, search = '', category = '', stock = '') {
+  static async getBooksWithPagination(page = 1, limit = 10, search = '', category = '', stock = '', rating = '') {
     try {
       const offset = (page - 1) * limit;
       let whereConditions = [];
       
       if (search) {
-        whereConditions.push(`(b.title LIKE '%${search}%' OR b.author LIKE '%${search}%' OR b.publisher LIKE '%${search}%')`);
+        const escapedSearch = search.replace(/'/g, "''");
+        whereConditions.push(`(b.title LIKE '%${escapedSearch}%' OR b.author LIKE '%${escapedSearch}%' OR b.publisher LIKE '%${escapedSearch}%')`);
       }
       
       if (category) {
@@ -90,6 +91,14 @@ class BookModel {
         whereConditions.push(`b.stock > 0`);
       } else if (stock === 'out-of-stock') {
         whereConditions.push(`b.stock = 0`);
+      }
+
+      // Rating filter
+      if (rating) {
+        whereConditions.push(`(
+          (SELECT AVG(CAST(r.rating AS FLOAT)) FROM Ratings r WHERE r.book_id = b.book_id) <= ${rating} 
+          OR (SELECT COUNT(*) FROM Ratings r WHERE r.book_id = b.book_id) = 0
+        )`);
       }
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -106,7 +115,12 @@ class BookModel {
         LEFT JOIN Categories c ON b.category_id = c.category_id
         LEFT JOIN BookImages bi ON b.book_id = bi.book_id AND bi.is_primary = 1
         ${whereClause}
-        ORDER BY b.title
+        ORDER BY 
+          CASE 
+            WHEN (SELECT AVG(CAST(rating AS FLOAT)) FROM Ratings WHERE book_id = b.book_id) IS NULL THEN 0
+            ELSE (SELECT AVG(CAST(rating AS FLOAT)) FROM Ratings WHERE book_id = b.book_id)
+          END DESC,
+          b.title ASC
         OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
       `;
       
@@ -142,10 +156,16 @@ class BookModel {
     try {
       const { title, author, publisher, publish_year, isbn, pages, stock, location, description, category_id } = bookData;
       
+      // Escape single quotes to prevent SQL injection
+      const escapeString = (str) => {
+        if (!str) return '';
+        return str.replace(/'/g, "''");
+      };
+      
       const insertBookQuery = `
         INSERT INTO Books (title, author, publisher, publish_year, isbn, pages, stock, location, description, category_id)
         OUTPUT INSERTED.book_id
-        VALUES ('${title}', '${author || ''}', '${publisher || ''}', ${publish_year || new Date().getFullYear()}, ${isbn || 'NULL'}, ${pages || 'NULL'}, ${stock || 0}, '${location || ''}', '${description || ''}', ${category_id || 'NULL'})
+        VALUES ('${escapeString(title)}', '${escapeString(author || '')}', '${escapeString(publisher || '')}', ${publish_year || new Date().getFullYear()}, ${isbn || 'NULL'}, ${pages || 'NULL'}, ${stock || 0}, '${escapeString(location || '')}', '${escapeString(description || '')}', ${category_id || 'NULL'})
       `;
       const result = await connectDBDigitalLibrary(insertBookQuery);
       const bookId = result.recordset[0].book_id;
@@ -154,7 +174,7 @@ class BookModel {
       if (bookData.image_url) {
         const imageQuery = `
           INSERT INTO BookImages (book_id, image_url, is_primary)
-          VALUES (${bookId}, '${bookData.image_url}', 1)
+          VALUES (${bookId}, '${escapeString(bookData.image_url)}', 1)
         `;
         await connectDBDigitalLibrary(imageQuery);
       }
@@ -170,12 +190,18 @@ class BookModel {
     try {
       const { title, author, publisher, publish_year, isbn, pages, stock, location, description, category_id } = bookData;
       
+      // Escape single quotes to prevent SQL injection
+      const escapeString = (str) => {
+        if (!str) return '';
+        return str.replace(/'/g, "''");
+      };
+      
       const query = `
         UPDATE Books 
-        SET title = '${title}', author = '${author || ''}', publisher = '${publisher || ''}', 
+        SET title = '${escapeString(title)}', author = '${escapeString(author || '')}', publisher = '${escapeString(publisher || '')}', 
             publish_year = ${publish_year || new Date().getFullYear()}, 
             isbn = ${isbn || 'NULL'}, pages = ${pages || 'NULL'},
-            stock = ${stock || 0}, location = '${location || ''}', description = '${description || ''}',
+            stock = ${stock || 0}, location = '${escapeString(location || '')}', description = '${escapeString(description || '')}',
             category_id = ${category_id || 'NULL'}
         WHERE book_id = ${bookId}
       `;
@@ -212,7 +238,7 @@ class BookModel {
         // Insert new image record
         const imageQuery = `
           INSERT INTO BookImages (book_id, image_url, is_primary)
-          VALUES (${bookId}, '${bookData.image_url}', 1)
+          VALUES (${bookId}, '${escapeString(bookData.image_url)}', 1)
         `;
         await connectDBDigitalLibrary(imageQuery);
       }
